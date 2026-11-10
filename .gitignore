@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.test-dist/
+keys/
+coverage/
+.env
+.env.*
+!.env.example
+!.env.docker.example
+*.log
+.DS_Store
+.idea/
+.vscode/
+*.tsbuildinfo

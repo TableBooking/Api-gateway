@@ -1,0 +1,42 @@
+services:
+  gateway:
+    image: ${GATEWAY_IMAGE:-api-gateway:local}
+    build:
+      context: .
+      target: runtime
+    init: true
+    restart: unless-stopped
+    ports:
+      - '${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080'
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 8080
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-10}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-10000}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://host.docker.internal:3001}
+      BOOKING_SERVICE_URL: ${BOOKING_SERVICE_URL:-http://host.docker.internal:3002}
+      OPERATIONS_SERVICE_URL: ${OPERATIONS_SERVICE_URL:-http://host.docker.internal:3003}
+      TRACKING_SERVICE_URL: ${TRACKING_SERVICE_URL:-http://host.docker.internal:3004}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://host.docker.internal:3005}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET to a generated random secret}
+      JWT_ISSUER: ${JWT_ISSUER:-tablebooking-auth}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-tablebooking-api}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
