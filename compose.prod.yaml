@@ -17,14 +17,17 @@ services:
       AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-10}
       RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
       UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-10000}
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-1048576}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:?Set AUTH_SERVICE_URL}
       BOOKING_SERVICE_URL: ${BOOKING_SERVICE_URL:?Set BOOKING_SERVICE_URL}
       OPERATIONS_SERVICE_URL: ${OPERATIONS_SERVICE_URL:?Set OPERATIONS_SERVICE_URL}
       TRACKING_SERVICE_URL: ${TRACKING_SERVICE_URL:?Set TRACKING_SERVICE_URL}
       NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:?Set NOTIFICATION_SERVICE_URL}
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET to a generated random secret}
+      JWT_PUBLIC_KEY_PATH: /run/secrets/auth_public_key
       JWT_ISSUER: ${JWT_ISSUER:?Set JWT_ISSUER}
       JWT_AUDIENCE: ${JWT_AUDIENCE:?Set JWT_AUDIENCE}
+    secrets:
+      - auth_public_key
     networks:
       - platform
     read_only: true
@@ -36,6 +39,10 @@ services:
       options:
         max-size: 10m
         max-file: '3'
+
+secrets:
+  auth_public_key:
+    file: ${JWT_PUBLIC_KEY_FILE:-./keys/auth-public.pem}
 
 networks:
   platform:

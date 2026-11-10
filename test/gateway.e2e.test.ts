@@ -1,21 +1,26 @@
 import assert from 'node:assert/strict';
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import test from 'node:test';
 import { routes } from '../src/modules/routing/routes.js';
-import { accessToken, fixture, readJson, testSecret, type SeenRequest } from './helpers.js';
+import { accessToken, fixture, readJson, type SeenRequest } from './helpers.js';
 
 test('health is public and does not depend on Notification availability', async (t) => {
   const { request, servers } = await fixture(t);
   await new Promise<void>((resolve) => servers.notification.close(() => resolve()));
-  for (const path of ['/health/live', '/health/ready']) {
+  for (const path of ['/health/live', '/health/ready', '/api/health']) {
     const response = await request(path);
     assert.equal(response.status, 200);
     assert.ok(response.headers.get('x-request-id'));
+    if (path === '/api/health') assert.deepEqual(await response.json(), { gateway: 'ok' });
   }
   const authorization = `Bearer ${await accessToken()}`;
-  assert.equal(
-    (await request('/api/notifications/mine', { headers: { authorization } })).status,
-    502,
-  );
+  const unavailable = await request('/api/notifications/mine', { headers: { authorization } });
+  assert.equal(unavailable.status, 502);
+  assert.deepEqual(await unavailable.json(), {
+    code: 'UPSTREAM_UNAVAILABLE',
+    message: 'Upstream unavailable',
+    correlationId: unavailable.headers.get('x-request-id'),
+  });
   assert.equal((await request('/api/bookings/mine', { headers: { authorization } })).status, 200);
 });
 
@@ -37,6 +42,10 @@ test('all published routes reach the correct service with their /api prefix inta
       },
     });
     assert.ok(response.ok, `${route.method} ${path}: ${response.status}`);
+    if (route.service === 'gateway') {
+      assert.deepEqual(await response.json(), { gateway: 'ok' });
+      continue;
+    }
     const body = await readJson<SeenRequest & { received?: SeenRequest }>(response);
     const record = body.received ?? body;
     assert.equal(record.service, route.service, path);
@@ -62,8 +71,8 @@ test('streams the original JSON body, query, token and Idempotency-Key without c
     body,
   });
   assert.equal(response.status, 202);
-  const result = await readJson<{ status: string; received: SeenRequest }>(response);
-  assert.equal(result.status, 'QUEUED');
+  const result = await readJson<{ processingStatus: string; received: SeenRequest }>(response);
+  assert.equal(result.processingStatus, 'QUEUED');
   assert.equal(result.received.body, body);
   assert.equal(result.received.headers.authorization, authorization);
   assert.equal(result.received.headers['idempotency-key'], 'create-001');
@@ -103,9 +112,15 @@ test('rejects missing, tampered, expired and incompatible JWT claims before cont
     `Bearer ${await accessToken('CUSTOMER', { aud: 'other-audience' })}`,
     `Bearer ${await accessToken('CUSTOMER', { role: 'ADMIN' })}`,
     `Bearer ${await accessToken('CUSTOMER', { sub: '' })}`,
+    `Bearer ${await accessToken('CUSTOMER', { sub: 'customer-1' })}`,
+    `Bearer ${await accessToken('CUSTOMER', { exp: undefined })}`,
+    `Bearer ${await accessToken('CUSTOMER', { sub: undefined })}`,
+    `Bearer ${await accessToken('CUSTOMER', { role: undefined })}`,
+    `Bearer ${await accessToken('CUSTOMER', { nbf: Math.floor(Date.now() / 1000) + 3600 })}`,
+    `Bearer ${await accessToken('CUSTOMER', { iss: 'tablebooking-auth', aud: 'tablebooking-api' })}`,
     `Bearer ${(await accessToken()).slice(0, -8)}tampered`,
-    `Bearer ${await accessToken('CUSTOMER', {}, `${testSecret}-wrong`)}`,
-    `Bearer ${await accessToken('CUSTOMER', {}, testSecret, 'HS384')}`,
+    `Bearer ${await accessToken('CUSTOMER', {}, generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey)}`,
+    `Bearer ${await accessToken('CUSTOMER', {}, randomBytes(32), 'HS256')}`,
   ]) {
     const response = await request('/api/users/me', { headers: { authorization } });
     assert.equal(response.status, 401);
@@ -199,11 +214,16 @@ test('uses a stricter auth rate limit while keeping health checks available', as
   assert.equal((await request('/api/auth/login', { method: 'POST' })).status, 200);
   const limited = await request('/api/auth/login', { method: 'POST' });
   assert.equal(limited.status, 429);
-  assert.equal((await readJson(limited)).code, 'RATE_LIMITED');
+  assert.deepEqual(await limited.json(), {
+    code: 'RATE_LIMITED',
+    message: 'Too many requests',
+    correlationId: limited.headers.get('x-request-id'),
+  });
   assert.ok(limited.headers.get('x-request-id'));
   assert.ok(limited.headers.get('retry-after'));
   assert.equal((await request('/health/live')).status, 200);
   assert.equal((await request('/health/ready')).status, 200);
+  assert.equal((await request('/api/health')).status, 200);
 });
 
 test('returns 504 for an upstream timeout', async (t) => {
@@ -212,5 +232,9 @@ test('returns 504 for an upstream timeout', async (t) => {
     headers: { authorization: `Bearer ${await accessToken()}` },
   });
   assert.equal(response.status, 504);
-  assert.equal((await readJson(response)).code, 'UPSTREAM_TIMEOUT');
+  assert.deepEqual(await response.json(), {
+    code: 'UPSTREAM_TIMEOUT',
+    message: 'Upstream timed out',
+    correlationId: response.headers.get('x-request-id'),
+  });
 });

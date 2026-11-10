@@ -3,14 +3,16 @@
 ## Điều kiện tích hợp
 
 Gateway image không chứa 5 backend, PostgreSQL hoặc RabbitMQ. Các service thuộc repo
-platform và phải truy cập được từ container gateway. Đồng bộ JWT_SECRET với Auth;
-không đưa secret vào repo/image. Docker Engine/Desktop và Compose v2 phải đang chạy.
+platform và phải truy cập được từ container gateway. Dùng public key khớp private
+key của Auth; không đưa private key vào gateway hoặc image. Docker Engine/Desktop
+và Compose v2 phải đang chạy.
 
 ## Build local và gọi backend chạy trên host
 
 Copy [.env.docker.example](../.env.docker.example) thành `.env.docker`, sửa các target
 thành `http://host.docker.internal:3001` ... `:3005` nếu backend đang chạy trên host.
-Thay JWT_SECRET placeholder bằng secret ngẫu nhiên, kiểm tra issuer/audience khớp Auth. Sau đó:
+Đặt JWT_PUBLIC_KEY_FILE về file public key thật, kiểm tra issuer/audience khớp Auth.
+Nếu chưa có key, xem lệnh sinh key trong [authentication](authentication.md). Sau đó:
 
 ```sh
 docker compose --env-file .env.docker up --build -d
@@ -24,14 +26,14 @@ thì gateway và backend cần ở network chung. Không dùng localhost cho ser
 
 [Dockerfile](../Dockerfile) build bằng Nest CLI, runtime chỉ chứa `dist/`, production
 dependencies và manifest. Chạy user `node`, HTTP port 8080, health check liveness.
-JWT_SECRET chỉ truyền qua environment lúc chạy. Compose bật init, read-only filesystem,
+Public key chỉ mount read-only lúc chạy. Compose bật init, read-only filesystem,
 drop capabilities, log rotation và shutdown grace period 15 giây.
 
 ## GitHub CI
 
 [CI workflow](../.github/workflows/ci.yml) chạy trên PR/main và được tái sử dụng khi
 publish: `npm ci` → check → test → Nest build → Docker build và health smoke test.
-Container smoke test dùng secret HS256 ngẫu nhiên do CI tạo và mask; không cần credential Auth thật.
+Container smoke test dùng RSA public key tạm do CI tạo; không cần credential Auth thật.
 
 ## Cấu hình Docker Hub
 
@@ -61,7 +63,7 @@ chỉ sinh tag SHA; không tự tạo version release. Image có provenance/SBOM
 ## Deploy production bằng image
 
 Dùng [compose.prod.yaml](../compose.prod.yaml) độc lập: chỉ có `image`, không có
-build context; server không cần source. Copy file này và `.env.docker`
+build context; server không cần source. Copy file này, public key và `.env.docker`
 đã cấu hình lên server. Ví dụ `.env.docker`:
 
 ```dotenv
@@ -75,9 +77,9 @@ BOOKING_SERVICE_URL=http://booking:3002
 OPERATIONS_SERVICE_URL=http://operations:3003
 TRACKING_SERVICE_URL=http://tracking:3004
 NOTIFICATION_SERVICE_URL=http://notification:3005
-JWT_SECRET=replace-with-generated-random-secret-at-least-32-bytes
-JWT_ISSUER=tablebooking-auth
-JWT_AUDIENCE=tablebooking-api
+JWT_PUBLIC_KEY_FILE=./keys/auth-public.pem
+JWT_ISSUER=restaurant-auth
+JWT_AUDIENCE=restaurant-api
 PLATFORM_NETWORK=tablebooking-platform
 ```
 
@@ -114,7 +116,7 @@ trong platform; không suy ra từ health hoặc mock test gateway.
 
 Ghi lại image tag/digest hiện tại trước deploy. Khi lỗi, đổi `GATEWAY_IMAGE` về bản
 trước và chạy lại pull/up. Ưu tiên `version` hoặc `image@sha256:<digest>` thay latest.
-Không đổi/rollback JWT_SECRET mà không phối hợp Auth/backend/token TTL.
+Không đổi/rollback public key mà không phối hợp Auth/backend/token TTL.
 
 Compose một replica có thể gián đoạn ngắn khi thay container. CI tự kiểm tra/publish
 image; server deploy hiện thực hiện bằng các lệnh trên, chưa có SSH auto-deploy.

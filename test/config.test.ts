@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
 import test from 'node:test';
 import { loadConfig } from '../src/config/env.js';
 
-const base = { JWT_SECRET: randomBytes(32).toString('hex') };
+const base = {};
 
-test('requires a JWT secret with no built-in fallback', () => {
-  assert.throws(() => loadConfig({}), /JWT_SECRET/);
+test('uses a public key path without requiring a shared JWT secret', () => {
+  assert.equal(loadConfig({}).JWT_PUBLIC_KEY_PATH, './keys/auth-public.pem');
+  assert.equal(loadConfig({}).JWT_ISSUER, 'restaurant-auth');
+  assert.equal(loadConfig({}).JWT_AUDIENCE, 'restaurant-api');
+  assert.equal(loadConfig({}).MAX_REQUEST_BODY_BYTES, 1_048_576);
 });
 
 test('configuration describes five services and parses boolean false correctly', () => {
@@ -33,6 +35,9 @@ test('rejects invalid config without leaking URL credentials', () => {
     { RATE_LIMIT_MAX: '-1' },
     { AUTH_RATE_LIMIT_MAX: '0' },
     { UPSTREAM_TIMEOUT_MS: 'NaN' },
+    { MAX_REQUEST_BODY_BYTES: '0' },
+    { MAX_REQUEST_BODY_BYTES: '1.5' },
+    { MAX_REQUEST_BODY_BYTES: '9007199254740992' },
     { TRUST_PROXY: 'yes' },
     { AUTH_SERVICE_URL: 'file:///etc/passwd' },
     { AUTH_SERVICE_URL: 'http://user:secret@localhost:3001' },
@@ -40,10 +45,8 @@ test('rejects invalid config without leaking URL credentials', () => {
     { OPERATIONS_SERVICE_URL: 'http://localhost:3003?query=1' },
     { CORS_ORIGINS: '*' },
     { JWT_ISSUER: '' },
-    { JWT_SECRET: '' },
-    { JWT_SECRET: 'too-short' },
-    { JWT_SECRET: ' '.repeat(32) },
-    { JWT_SECRET: 'replace-with-generated-random-secret-at-least-32-bytes' },
+    { JWT_PUBLIC_KEY_PATH: '' },
+    { JWT_PUBLIC_KEY_PATH: '   ' },
   ]) {
     assert.throws(
       () => loadConfig({ ...base, ...env }),
@@ -51,7 +54,6 @@ test('rejects invalid config without leaking URL credentials', () => {
         assert.ok(error instanceof Error);
         assert.match(error.message, /Invalid environment configuration/);
         assert.doesNotMatch(error.message, /user:secret/);
-        assert.ok(!error.message.includes(base.JWT_SECRET));
         return true;
       },
     );

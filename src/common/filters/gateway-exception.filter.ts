@@ -15,7 +15,6 @@ export class GatewayExceptionFilter implements ExceptionFilter {
     if (response.headersSent) return;
     if (statusCode === 401) response.setHeader('www-authenticate', 'Bearer');
     response.status(statusCode).json({
-      statusCode,
       code: code ?? (statusCode === 404 ? 'ROUTE_NOT_FOUND' : 'GATEWAY_ERROR'),
       message:
         statusCode >= 500
@@ -23,7 +22,7 @@ export class GatewayExceptionFilter implements ExceptionFilter {
           : error instanceof Error
             ? error.message
             : 'Request rejected',
-      requestId: String(request.id ?? response.getHeader('x-request-id') ?? ''),
+      correlationId: String(request.id ?? response.getHeader('x-request-id') ?? ''),
     });
   }
 }

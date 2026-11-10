@@ -45,11 +45,10 @@ jobs:
       - name: Verify container health
         shell: bash
         run: |
-          JWT_SECRET="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")"
-          echo "::add-mask::$JWT_SECRET"
-          export JWT_SECRET
+          node -e "console.log(require('node:crypto').generateKeyPairSync('rsa', {modulusLength: 2048, publicKeyEncoding: {type: 'spki', format: 'pem'}}).publicKey)" > "$RUNNER_TEMP/auth-public.pem"
           docker run -d --name gateway-ci -p 127.0.0.1:8080:8080 \
-            --env JWT_SECRET \
+            -e JWT_PUBLIC_KEY_PATH=/run/secrets/auth_public_key \
+            --mount "type=bind,src=$RUNNER_TEMP/auth-public.pem,dst=/run/secrets/auth_public_key,readonly" \
             api-gateway:ci
           trap 'docker logs gateway-ci; docker rm -f gateway-ci' EXIT
           curl --fail --retry 10 --retry-delay 2 --retry-connrefused http://127.0.0.1:8080/health/ready

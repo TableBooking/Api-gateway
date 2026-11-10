@@ -2,13 +2,15 @@
 
 ## Bảng target
 
-| Route group               | Target                     | Ví dụ upstream                                            |
-| ------------------------- | -------------------------- | --------------------------------------------------------- |
-| `/api/auth`, `/api/users` | `AUTH_SERVICE_URL`         | `http://localhost:3001/api/users/me`                      |
-| `/api/bookings`           | `BOOKING_SERVICE_URL`      | `http://localhost:3002/api/bookings/mine`                 |
-| `/api/operations`         | `OPERATIONS_SERVICE_URL`   | `http://localhost:3003/api/operations/tables`             |
-| `/api/tracking`           | `TRACKING_SERVICE_URL`     | `http://localhost:3004/api/tracking/bookings/id/timeline` |
-| `/api/notifications`      | `NOTIFICATION_SERVICE_URL` | `http://localhost:3005/api/notifications/mine`            |
+| Route group                                                                                     | Target                     | Ví dụ upstream                                            |
+| ----------------------------------------------------------------------------------------------- | -------------------------- | --------------------------------------------------------- |
+| `/api/auth`, `/api/users`                                                                       | `AUTH_SERVICE_URL`         | `http://localhost:3001/api/users/me`                      |
+| `/api/bookings`                                                                                 | `BOOKING_SERVICE_URL`      | `http://localhost:3002/api/bookings/mine`                 |
+| `/api/operations`                                                                               | `OPERATIONS_SERVICE_URL`   | `http://localhost:3003/api/operations/tables`             |
+| `/api/restaurants/current`, `/api/restaurants/current/areas`, `/api/slots`, `/api/availability` | `OPERATIONS_SERVICE_URL`   | Public discovery V2, giữ nguyên path                      |
+| `/api/tracking`                                                                                 | `TRACKING_SERVICE_URL`     | `http://localhost:3004/api/tracking/bookings/id/timeline` |
+| `/api/notifications`                                                                            | `NOTIFICATION_SERVICE_URL` | `http://localhost:3005/api/notifications/mine`            |
+| `/api/health`                                                                                   | Gateway local              | 200 `{"gateway":"ok"}`, không gọi backend                 |
 
 Các port là mặc định tích hợp đề xuất, không được ấn định trong kế hoạch. Schema chỉ
 chấp nhận HTTP(S) origin, không chứa credential, path, query hoặc fragment.
@@ -23,6 +25,10 @@ backend thực tế khác, chốt rewrite rõ ràng và sửa cả test/docs tr�
 method, path, target, public/role policy và Idempotency-Key. Không proxy toàn bộ
 prefix một cách tự do: `/api/auth/internal`, `DELETE /api/auth/login`, endpoint health
 nội bộ và route ngoài [API contract](api-contract.md) trả 404.
+
+Bao phủ 41 operation OpenAPI V2; transition được mở rộng thành 7 action cụ thể
+(47 registry entry), không nhận action tùy ý. Public discovery chỉ gồm bốn GET
+liệt kê trên. Refresh/logout dùng trusted Origin + cookie tại Auth, không cần access JWT.
 
 ID trong route nhận chữ ASCII, số, `_`, `-`, phù hợp UUID/ID mẫu của hệ thống. Không
 nhận encoded slash, dot segment hoặc URL do client truyền để đổi upstream. Có thể
@@ -60,6 +66,10 @@ hostname/path. Service không được tin các identity header khác do client 
   hoặc ghép JSON lỗi vào response đã gửi.
 - Không retry, failover hoặc follow redirect tự động; tránh lặp POST booking/refresh.
 
-Giới hạn kích thước body/upload và deadline tổng cần bổ sung middleware tại gateway
-có kiểm thử stream. Gateway hiện không buffer toàn bộ body để áp
-DTO validation/body limit. WebSocket/SSE contract chưa được hỗ trợ riêng.
+Body bị giới hạn bởi `MAX_REQUEST_BODY_BYTES` (mặc định 1 MiB), tính theo byte truyền
+trên HTTP, không giải nén/parse JSON. Content-Length vượt ngưỡng bị trả 413 trước khi
+gọi upstream. Với chunked upload, gateway đếm byte khi proxy bắt đầu pipe, dừng upload
+và trả 413 khi vượt ngưỡng; một phần body có thể đã tới backend trước khi phát hiện.
+Backend phải chờ body hoàn chỉnh và tự validate trước khi thực thi command. Gateway
+không buffer body, giữ nguyên byte và backpressure. Nếu upstream đã gửi response thì
+gateway chỉ có thể đóng stream. Tổng deadline và WebSocket/SSE contract chưa được hỗ trợ riêng.

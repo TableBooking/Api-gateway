@@ -8,6 +8,7 @@
     "node": ">=24.15.0 <25"
   },
   "scripts": {
+    "keys:generate": "node scripts/generate-jwt-keys.mjs",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",

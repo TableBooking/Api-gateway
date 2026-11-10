@@ -40,22 +40,20 @@ const schema = z.object({
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  MAX_REQUEST_BODY_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(Number.MAX_SAFE_INTEGER)
+    .default(1_048_576),
   AUTH_SERVICE_URL: serviceUrl.default('http://localhost:3001'),
   BOOKING_SERVICE_URL: serviceUrl.default('http://localhost:3002'),
   OPERATIONS_SERVICE_URL: serviceUrl.default('http://localhost:3003'),
   TRACKING_SERVICE_URL: serviceUrl.default('http://localhost:3004'),
   NOTIFICATION_SERVICE_URL: serviceUrl.default('http://localhost:3005'),
-  JWT_SECRET: z
-    .string()
-    .refine(
-      (value) =>
-        Buffer.byteLength(value, 'utf8') >= 32 &&
-        value.trim().length > 0 &&
-        !value.startsWith('replace-with-'),
-      { message: 'Set a generated JWT secret of at least 32 bytes; placeholders are not allowed' },
-    ),
-  JWT_ISSUER: z.string().min(1).default('tablebooking-auth'),
-  JWT_AUDIENCE: z.string().min(1).default('tablebooking-api'),
+  JWT_PUBLIC_KEY_PATH: z.string().trim().min(1).default('./keys/auth-public.pem'),
+  JWT_ISSUER: z.string().min(1).default('restaurant-auth'),
+  JWT_AUDIENCE: z.string().min(1).default('restaurant-api'),
 });
 
 export type GatewayConfig = z.infer<typeof schema>;

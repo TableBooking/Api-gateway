@@ -1,30 +1,35 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
-import { randomBytes } from 'node:crypto';
+import { generateKeyPairSync, type KeyObject } from 'node:crypto';
+import { mkdtemp, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { TestContext } from 'node:test';
-import { SignJWT, type JWTPayload } from 'jose';
+import { SignJWT } from 'jose';
 import { createApplication } from '../src/bootstrap.js';
 import type { Role, ServiceName } from '../src/modules/routing/routes.js';
 
-export const testSecret = randomBytes(32).toString('hex');
+const keys = generateKeyPairSync('rsa', { modulusLength: 2048 });
 
 export function accessToken(
   role: Role = 'CUSTOMER',
-  claims: JWTPayload = {},
-  secret: string = testSecret,
-  algorithm: 'HS256' | 'HS384' = 'HS256',
+  claims: Record<string, unknown> = {},
+  key: KeyObject | Uint8Array = keys.privateKey,
+  algorithm: 'RS256' | 'HS256' = 'RS256',
 ) {
   return new SignJWT({
-    sub: 'customer-1',
+    sub: 'f6c2ae37-417c-4c08-9fb9-a13fe5c6797f',
+    email: 'customer@example.test',
+    iat: Math.floor(Date.now() / 1000),
     role,
-    iss: 'tablebooking-auth',
-    aud: 'tablebooking-api',
+    iss: 'restaurant-auth',
+    aud: 'restaurant-api',
     exp: Math.floor(Date.now() / 1000) + 300,
     ...claims,
   })
     .setProtectedHeader({ alg: algorithm })
-    .sign(new TextEncoder().encode(secret));
+    .sign(key);
 }
 
 export interface SeenRequest {
@@ -40,6 +45,9 @@ export async function readJson<T = Record<string, unknown>>(response: Response):
 }
 
 export async function fixture(t: TestContext, overrides: NodeJS.ProcessEnv = {}) {
+  const directory = await mkdtemp(join(tmpdir(), 'tablebooking-gateway-'));
+  const keyPath = join(directory, 'auth-public.pem');
+  await writeFile(keyPath, keys.publicKey.export({ type: 'spki', format: 'pem' }));
   const seen: SeenRequest[] = [];
   const servers = {} as Record<ServiceName, Server>;
   const state: { app?: INestApplication } = {};
@@ -54,18 +62,25 @@ export async function fixture(t: TestContext, overrides: NodeJS.ProcessEnv = {})
           }),
       ),
     );
+    await unlink(keyPath);
+    await rmdir(directory);
   });
   const environment: NodeJS.ProcessEnv = {
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
     CORS_ORIGINS: 'http://localhost:5173',
-    JWT_SECRET: testSecret,
+    JWT_PUBLIC_KEY_PATH: keyPath,
     AUTH_RATE_LIMIT_MAX: '100',
   };
   for (const service of ['auth', 'booking', 'operations', 'tracking', 'notification'] as const) {
     const server = createServer(async (request, response) => {
       const chunks: Buffer[] = [];
-      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      try {
+        for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      } catch {
+        // The gateway aborts the upstream upload when a streamed body exceeds its limit.
+        return;
+      }
       const record: SeenRequest = {
         service,
         url: request.url ?? '',
@@ -93,7 +108,7 @@ export async function fixture(t: TestContext, overrides: NodeJS.ProcessEnv = {})
       } else if (request.method === 'POST' && request.url === '/api/bookings') {
         response.statusCode = 202;
         response.end(
-          JSON.stringify({ bookingId: 'booking-1', status: 'QUEUED', received: record }),
+          JSON.stringify({ bookingId: 'booking-1', processingStatus: 'QUEUED', received: record }),
         );
       } else {
         response.end(JSON.stringify(record));

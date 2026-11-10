@@ -1,0 +1,251 @@
+{
+  "source": "https://github.com/TableBooking/docs/blob/82444c44a2bebbbe077e2cb9969a70f3a0ce026b/restaurant-nestjs-playbook-team/contracts/openapi/restaurant-api-v2.yaml",
+  "operations": [
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "group": "Auth",
+      "roles": "PUBLIC"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "group": "Auth",
+      "roles": "PUBLIC"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "group": "Auth",
+      "roles": "PUBLIC"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "group": "Auth",
+      "roles": "PUBLIC"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/change-password",
+      "group": "Auth",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/me",
+      "group": "Auth",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/users/me",
+      "group": "Auth",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/staff",
+      "group": "Auth",
+      "roles": "MANAGER"
+    },
+    {
+      "method": "POST",
+      "path": "/api/users/staff",
+      "group": "Auth",
+      "roles": "MANAGER"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/users/{id}/status",
+      "group": "Auth",
+      "roles": "MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/restaurants/current",
+      "group": "Operations",
+      "roles": "PUBLIC"
+    },
+    {
+      "method": "GET",
+      "path": "/api/restaurants/current/areas",
+      "group": "Operations",
+      "roles": "PUBLIC"
+    },
+    {
+      "method": "GET",
+      "path": "/api/slots",
+      "group": "Operations",
+      "roles": "PUBLIC"
+    },
+    {
+      "method": "GET",
+      "path": "/api/availability",
+      "group": "Operations",
+      "roles": "PUBLIC"
+    },
+    {
+      "method": "POST",
+      "path": "/api/bookings",
+      "group": "Booking",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookings/mine",
+      "group": "Booking",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookings/{id}",
+      "group": "Booking",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "POST",
+      "path": "/api/bookings/{id}/cancellation-requests",
+      "group": "Booking",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookings/commands/{commandId}",
+      "group": "Booking",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/operations/reservations",
+      "group": "Operations",
+      "roles": "STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/operations/reservations/{id}",
+      "group": "Operations",
+      "roles": "STAFF|MANAGER"
+    },
+    {
+      "method": "POST",
+      "path": "/api/operations/reservations/{id}/{action}",
+      "group": "Operations",
+      "roles": "STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/operations/tables",
+      "group": "Operations",
+      "roles": "STAFF|MANAGER"
+    },
+    {
+      "method": "POST",
+      "path": "/api/operations/tables",
+      "group": "Operations",
+      "roles": "MANAGER"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/operations/tables/{id}",
+      "group": "Operations",
+      "roles": "MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/operations/areas",
+      "group": "Operations",
+      "roles": "STAFF|MANAGER"
+    },
+    {
+      "method": "POST",
+      "path": "/api/operations/areas",
+      "group": "Operations",
+      "roles": "MANAGER"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/operations/areas/{id}",
+      "group": "Operations",
+      "roles": "MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/operations/slot-configs",
+      "group": "Operations",
+      "roles": "STAFF|MANAGER"
+    },
+    {
+      "method": "POST",
+      "path": "/api/operations/slot-configs",
+      "group": "Operations",
+      "roles": "MANAGER"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/operations/slot-configs/{code}",
+      "group": "Operations",
+      "roles": "MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/operations/stats/summary",
+      "group": "Operations",
+      "roles": "MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tracking/bookings/{id}/timeline",
+      "group": "Tracking",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tracking/bookings/{id}/status",
+      "group": "Tracking",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications/mine",
+      "group": "Notification",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications/unread-count",
+      "group": "Notification",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications/{id}/read",
+      "group": "Notification",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications/read-all",
+      "group": "Notification",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications/preferences",
+      "group": "Notification",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/notifications/preferences",
+      "group": "Notification",
+      "roles": "CUSTOMER|STAFF|MANAGER"
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "group": "Gateway",
+      "roles": "PUBLIC"
+    }
+  ]
+}

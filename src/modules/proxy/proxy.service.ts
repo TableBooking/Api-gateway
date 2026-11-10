@@ -9,7 +9,7 @@ import type { ServiceName } from '../routing/routes.js';
 export class ProxyService {
   private readonly proxies: Record<ServiceName, RequestHandler<GatewayRequest, Response>>;
 
-  constructor(@Inject(GATEWAY_CONFIG) config: GatewayConfig) {
+  constructor(@Inject(GATEWAY_CONFIG) private readonly config: GatewayConfig) {
     const targets: Record<ServiceName, string> = {
       auth: config.AUTH_SERVICE_URL,
       booking: config.BOOKING_SERVICE_URL,
@@ -26,7 +26,20 @@ export class ProxyService {
           ws: false,
           proxyTimeout: config.UPSTREAM_TIMEOUT_MS,
           on: {
-            proxyReq: (outgoing, request) => {
+            proxyReq: (outgoing, request, response) => {
+              // Attach only when the proxy is ready to pipe: consuming earlier loses body bytes.
+              let received = 0;
+              const countBytes = (chunk: Buffer) => {
+                received += chunk.length;
+                if (received > config.MAX_REQUEST_BODY_BYTES) {
+                  request.unpipe(outgoing);
+                  request.pause();
+                  this.rejectOversizedBody(request, response);
+                  outgoing.destroy();
+                }
+              };
+              request.on('data', countBytes);
+              outgoing.once('close', () => request.off('data', countBytes));
               outgoing.once('timeout', () => {
                 request.upstreamTimedOut = true;
               });
@@ -67,6 +80,7 @@ export class ProxyService {
             },
             error: (error, request, response) => {
               if (!('writeHead' in response)) return;
+              if (response.writableEnded) return;
               if (response.headersSent) {
                 response.destroy();
                 return;
@@ -79,10 +93,9 @@ export class ProxyService {
               response.writeHead(statusCode, { 'content-type': 'application/json' });
               response.end(
                 JSON.stringify({
-                  statusCode,
                   code: timeout ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_UNAVAILABLE',
                   message: timeout ? 'Upstream timed out' : 'Upstream unavailable',
-                  requestId: String(request.id),
+                  correlationId: String(request.id),
                 }),
               );
             },
@@ -94,6 +107,28 @@ export class ProxyService {
 
   forward(request: GatewayRequest, response: Response): Promise<void> {
     if (!request.gatewayRoute) throw new InternalServerErrorException();
+    if (request.gatewayRoute.service === 'gateway') {
+      response.json({ gateway: 'ok' });
+      return Promise.resolve();
+    }
+    const length = request.headers['content-length'];
+    if (length && Number(length) > this.config.MAX_REQUEST_BODY_BYTES) {
+      this.rejectOversizedBody(request, response);
+      return Promise.resolve();
+    }
     return this.proxies[request.gatewayRoute.service](request, response);
+  }
+
+  private rejectOversizedBody(request: GatewayRequest, response: Response): void {
+    if (response.headersSent) {
+      if (!response.writableEnded) response.destroy();
+      return;
+    }
+    response.setHeader('connection', 'close');
+    response.status(413).json({
+      code: 'PAYLOAD_TOO_LARGE',
+      message: 'Request body exceeds the gateway limit',
+      correlationId: String(request.id),
+    });
   }
 }

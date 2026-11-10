@@ -41,8 +41,9 @@ npm run build
 ```
 
 Test được compile vào `.test-dist/` rồi chạy bằng Node test runner vì NestJS có
-decorators. Fixture dựng 5 HTTP server ở `127.0.0.1` trên cổng ngẫu nhiên, sinh secret
-HS256 ngẫu nhiên chỉ trong bộ nhớ. Không dùng credential Auth thật và không ghi file key.
+decorators. Fixture dựng 5 HTTP server ở `127.0.0.1` trên cổng ngẫu nhiên, sinh RSA
+private key trong bộ nhớ và ghi public key vào thư mục tạm, dọn sau test. Test CLI
+sinh key dùng file tạm để kiểm tra key khớp nhau và không bị ghi đè. Không dùng key Auth thật.
 
 Test bao phủ config, toàn bộ route registry, stream body/query/header, JWT/role,
 Origin/cookie, CORS, request ID, rate limit, business response pass-through,
@@ -51,14 +52,14 @@ minh nghiệp vụ hay consumer/outbox của các service đã hoàn thiện.
 
 ## Chạy bản build
 
-Sau khi có `.env` với JWT_SECRET hợp lệ:
+Sau khi có `.env` và public key khớp Auth:
 
 ```sh
 npm run build
 npm start
 ```
 
-Lỗi cấu hình JWT_SECRET: thay placeholder, dùng secret ngẫu nhiên ít nhất 32 byte.
-401: kiểm tra secret/HS256/issuer/audience/sub/role/exp với Auth owner. 403 có thể từ
+Lỗi JWT_PUBLIC_KEY_PATH: kiểm tra đường dẫn, quyền đọc và RSA SPKI PEM tối thiểu 2048 bit.
+401: kiểm tra public key/RS256/issuer/audience/sub/role/exp với Auth owner. 403 có thể từ
 role/Origin tại gateway hoặc ownership tại backend. 502/504: kiểm tra target từ bên
 trong container. Dùng `x-request-id` để đối chiếu log, không in token/cookie/body/query.

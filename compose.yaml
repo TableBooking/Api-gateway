@@ -19,14 +19,17 @@ services:
       AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-10}
       RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
       UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-10000}
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-1048576}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://host.docker.internal:3001}
       BOOKING_SERVICE_URL: ${BOOKING_SERVICE_URL:-http://host.docker.internal:3002}
       OPERATIONS_SERVICE_URL: ${OPERATIONS_SERVICE_URL:-http://host.docker.internal:3003}
       TRACKING_SERVICE_URL: ${TRACKING_SERVICE_URL:-http://host.docker.internal:3004}
       NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://host.docker.internal:3005}
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET to a generated random secret}
-      JWT_ISSUER: ${JWT_ISSUER:-tablebooking-auth}
-      JWT_AUDIENCE: ${JWT_AUDIENCE:-tablebooking-api}
+      JWT_PUBLIC_KEY_PATH: /run/secrets/auth_public_key
+      JWT_ISSUER: ${JWT_ISSUER:-restaurant-auth}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-restaurant-api}
+    secrets:
+      - auth_public_key
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     read_only: true
@@ -40,3 +43,7 @@ services:
       options:
         max-size: 10m
         max-file: '3'
+
+secrets:
+  auth_public_key:
+    file: ${JWT_PUBLIC_KEY_FILE:-./keys/auth-public.pem}

@@ -7,10 +7,11 @@ Booking, Operations, Tracking, Notification; không chứa database hoặc Rabbi
 ## Phạm vi
 
 - Proxy theo danh sách method/path cho phép, giữ nguyên prefix `/api`, query và body.
-- Xác minh access JWT HS256 bằng secret dùng chung với Auth, kiểm tra role CUSTOMER/STAFF/MANAGER.
+- Bao phủ 41 operation OpenAPI V2, gồm public restaurant/slots/availability và `/api/health`.
+- Xác minh access JWT RS256 bằng public key của Auth, kiểm tra role CUSTOMER/STAFF/MANAGER.
 - Chuyển tiếp Authorization, refresh cookie, Set-Cookie và Idempotency-Key.
 - CORS có credentials và allowlist, Origin check cho refresh/logout, rate limit theo IP,
-  security headers, request ID, JSON logging và health check.
+  security headers, request ID, lỗi V2 có correlationId, body limit 1 MiB và health check.
 - Docker build, Compose local/production, GitHub CI và phát hành image lên Docker Hub.
 
 Gateway không phát token, không lưu refresh session, không quản lý bàn hay booking,
@@ -28,17 +29,30 @@ cp .env.example .env
 
 PowerShell có thể dùng `Copy-Item .env.example .env`.
 
-3. Sinh secret ngẫu nhiên và đặt `JWT_SECRET` trong `.env`, dùng cùng giá trị ở Auth
-   và các backend xác minh token. Env mẫu chỉ có placeholder; app từ chối placeholder này.
+3. Nếu Auth đã có cặp RSA, copy public key của Auth vào `keys/auth-public.pem`.
+   Nếu hệ thống chưa có key, sinh **một cặp dùng chung cho hệ thống** bằng:
 
 ```sh
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+npm run keys:generate
 ```
 
-Secret chỉ dành cho backend, không đưa vào frontend, Git hoặc image Docker.
+Lệnh tạo `keys/auth-private.pem` (chỉ Auth dùng ký token) và `keys/auth-public.pem`
+(gateway/backend dùng verify). Thư mục `keys/` bị gitignore và dockerignore. Khi
+deploy, gateway chỉ nhận public key; private key được giữ riêng ở Auth.
 
-4. Chốt `JWT_ISSUER`, `JWT_AUDIENCE` và claim `role` với Auth owner. Các giá trị mẫu là
-   **hợp đồng đề xuất**, vì kế hoạch chưa cung cấp JWT payload thực tế.
+4. `JWT_ISSUER=restaurant-auth` và `JWT_AUDIENCE=restaurant-api` theo **bàn giao V2**,
+   không cần sinh ngẫu nhiên. Auth phải phát đúng hai giá trị trong claims `iss`/`aud`.
+   Cấu hình gateway:
+
+```dotenv
+JWT_PUBLIC_KEY_PATH=./keys/auth-public.pem
+JWT_ISSUER=restaurant-auth
+JWT_AUDIENCE=restaurant-api
+```
+
+RS256 không dùng `JWT_SECRET`. Auth phát `sub` UUID và `role` CUSTOMER/STAFF/MANAGER
+theo V2; dùng public key thật từ Auth để kiểm chứng tích hợp.
+
 5. Chỉnh URL 5 backend theo môi trường, rồi chạy:
 
 ```sh
@@ -46,18 +60,20 @@ npm run dev
 curl http://localhost:8080/health/ready
 ```
 
-Thiếu/secret quá ngắn hoặc còn placeholder thì gateway từ chối khởi động. Khi cấu hình hợp lệ, health vẫn hoạt
+Thiếu/sai public key hoặc RSA key dưới 2048 bit thì gateway từ chối khởi động. Khi cấu hình hợp lệ, health vẫn hoạt
 động dù backend chưa chạy; request tới backend ngừng hoạt động sẽ trả 502/504.
 
 ## Routing
 
-| Nhóm path                          | Service      | Biến cấu hình              |
-| ---------------------------------- | ------------ | -------------------------- |
-| `/api/auth/*`, `/api/users/*`      | Auth         | `AUTH_SERVICE_URL`         |
-| `/api/bookings`, `/api/bookings/*` | Booking      | `BOOKING_SERVICE_URL`      |
-| `/api/operations/*`                | Operations   | `OPERATIONS_SERVICE_URL`   |
-| `/api/tracking/*`                  | Tracking     | `TRACKING_SERVICE_URL`     |
-| `/api/notifications/*`             | Notification | `NOTIFICATION_SERVICE_URL` |
+| Nhóm path                                                                                       | Service       | Biến cấu hình              |
+| ----------------------------------------------------------------------------------------------- | ------------- | -------------------------- |
+| `/api/auth/*`, `/api/users/*`                                                                   | Auth          | `AUTH_SERVICE_URL`         |
+| `/api/bookings`, `/api/bookings/*`                                                              | Booking       | `BOOKING_SERVICE_URL`      |
+| `/api/operations/*`                                                                             | Operations    | `OPERATIONS_SERVICE_URL`   |
+| `/api/restaurants/current`, `/api/restaurants/current/areas`, `/api/slots`, `/api/availability` | Operations    | `OPERATIONS_SERVICE_URL`   |
+| `/api/tracking/*`                                                                               | Tracking      | `TRACKING_SERVICE_URL`     |
+| `/api/notifications/*`                                                                          | Notification  | `NOTIFICATION_SERVICE_URL` |
+| `/api/health`                                                                                   | Gateway local | Không gọi upstream         |
 
 Bảng trên là nhóm route; chỉ method/path cụ thể trong [API contract](docs/api-contract.md)
 mới được expose. Không có Users Service độc lập. Ví dụ `/api/users/me` được chuyển
@@ -78,7 +94,7 @@ src/
     middleware/                   Request ID, lọc forwarded headers không tin cậy
     types/                        Request type dùng chung
   modules/
-    auth/                         HS256 verifier và access guard
+    auth/                         RS256 verifier và access guard
     routing/                      Method/path, target service, role policy
     proxy/                        Controller và streaming HTTP proxy
     health/                       Liveness/readiness
@@ -93,6 +109,7 @@ của gateway chỉ xác minh token và kiểm tra quyền truy cập route.
 
 | Lệnh                                | Chức năng                                                         |
 | ----------------------------------- | ----------------------------------------------------------------- |
+| `npm run keys:generate`             | Sinh cặp RSA 3072 bit cho tích hợp local, không ghi đè key có sẵn |
 | `npm run dev` / `npm run start:dev` | Nest CLI build/watch và chạy app                                  |
 | `npm run check`                     | Typecheck, ESLint và Prettier                                     |
 | `npm test`                          | Compile test rồi chạy Node test runner với 5 HTTP backend fixture |
@@ -107,7 +124,7 @@ về source `.ts`. Xem [quy trình phát triển](docs/development.md).
 ## Docker và CI
 
 Env cho Docker tách riêng trong [.env.docker.example](.env.docker.example). Copy thành
-`.env.docker`, chỉnh địa chỉ backend và JWT_SECRET rồi dùng Compose. Production dùng
+`.env.docker`, chỉnh địa chỉ backend và file public key rồi dùng Compose. Production dùng
 [compose.prod.yaml](compose.prod.yaml) chỉ tham chiếu image, không có build context.
 
 GitHub CI kiểm tra code và Docker smoke test. Push tag `v0.1.0` hoặc chạy workflow thủ
@@ -128,6 +145,6 @@ Chi tiết build, networking, publish, deploy và rollback nằm trong [deployme
 7. [Development](docs/development.md)
 
 [AGENTS.md](AGENTS.md) hướng dẫn coding agent. Source hiện thực thi gateway policy;
-khả năng tích hợp đầy đủ còn cần đồng bộ JWT_SECRET/JWT claims, port và API contract
+khả năng tích hợp đầy đủ còn cần đồng bộ public key/JWT claims, port và API contract
 từ repo các backend. Các test trong repo dùng fixture, chưa xác nhận nghiệp vụ hay
 luồng RabbitMQ của toàn hệ thống.

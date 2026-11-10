@@ -22,8 +22,8 @@ Không triển khai lại Auth Service trong gateway.
 - `main.ts` là entrypoint listen/shutdown; `bootstrap.ts` tạo app có thể dùng trong test.
 - Config đọc qua `config/configuration.module.ts` + `config/env.ts`, inject `GATEWAY_CONFIG`.
 - Route/method/role khai báo duy nhất ở `modules/routing/routes.ts`.
-- `auth/` xác minh HS256/access policy; `proxy/` stream HTTP; `health/` phục vụ probes.
-- NestJS là gateway duy nhất trong thiết kế. JWT_SECRET chỉ nằm phía backend và phải khớp Auth.
+- `auth/` xác minh RS256/access policy; `proxy/` stream HTTP; `health/` phục vụ probes.
+- NestJS là gateway duy nhất. Chỉ Auth giữ RSA private key; gateway chỉ nhận public key khớp Auth.
 
 ## Quy tắc thay đổi
 
@@ -40,14 +40,15 @@ Không triển khai lại Auth Service trong gateway.
    lưu và xử lý; gateway chỉ bắt buộc/chuyển tiếp header cho create booking.
 7. Backend vẫn xác minh JWT/ownership. Không tin header `x-user-*` từ client;
    Authorization JWT mới là bằng chứng xác thực.
-8. Chỉ public register/login; refresh/logout dùng refresh cookie + Origin allowlist,
+8. Trong Auth chỉ public register/login; refresh/logout dùng refresh cookie + Origin allowlist,
    không phụ thuộc access JWT còn hạn. Không public toàn bộ `/api/auth/*`.
+   OpenAPI V2 còn public GET restaurant current/areas, slots, availability và gateway health.
 9. Không nhận upstream URL từ request, không wildcard CORS, không bật trust proxy mặc định.
 10. Không commit `.env`, `.env.docker`, secret, token; không sửa `dist/`, `.test-dist/`,
-    `node_modules/` thủ công. JWT_SECRET được truyền lúc runtime, không đưa vào frontend/image.
+    `node_modules/` thủ công. Chỉ mount public key lúc runtime, không đưa private key vào gateway/image.
 11. Không log token, cookie, body hoặc query string. Dùng Pino và request ID do gateway tạo.
-12. Kế hoạch chưa có OpenAPI/JWT payload backend hoàn chỉnh. Không mô tả giả định
-    tích hợp là hợp đồng đã được backend xác nhận; ghi rõ trong tài liệu.
+12. OpenAPI V2 và bàn giao JWT là contract mục tiêu (iss=restaurant-auth, aud=restaurant-api).
+    Không mô tả fixture hoặc contract mục tiêu là tích hợp backend thật đã xác nhận.
 
 ## Kiểm tra trước khi bàn giao
 
@@ -57,8 +58,10 @@ npm test
 npm run build
 ```
 
-Test HTTP backend local trên cổng ngẫu nhiên; không cần Auth thật hoặc secret hệ thống.
-Test secret HS256 chỉ sinh ngẫu nhiên trong bộ nhớ và không ghi vào file.
+Test HTTP backend local trên cổng ngẫu nhiên; không cần Auth thật hoặc key hệ thống.
+Test RSA private key ở trong bộ nhớ; public key/CLI key generation dùng thư mục tạm
+và được dọn sau test. Lệnh keys:generate chỉ phục vụ provisioning, không chạy khi startup;
+không ghi đè key có sẵn. Nếu Auth đã có key, dùng public key hiện có thay vì sinh cặp mới.
 
 Khi sửa Docker/deploy, chạy thêm:
 
@@ -68,8 +71,8 @@ docker compose --env-file .env.docker.example -f compose.prod.yaml config --quie
 docker build -t api-gateway:check .
 ```
 
-Compose config có thể validate bằng placeholder env mẫu khi chưa có backend/network;
-chạy container thật phải thay JWT_SECRET bằng giá trị ngẫu nhiên hợp lệ và khớp Auth.
+Compose config có thể validate bằng env mẫu khi chưa có backend/network/key;
+chạy container thật cần public key hợp lệ khớp Auth và kết nối tới backend.
 Báo rõ kiểm tra nào chưa chạy nếu môi trường thiếu Docker daemon.
 Không khẳng định image đã push khi chưa có kết quả registry/workflow.
 

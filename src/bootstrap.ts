@@ -32,10 +32,9 @@ export async function createApplication(environment?: NodeJS.ProcessEnv) {
   });
   const limitHandler: RateLimitExceededEventHandler = (request, response) => {
     response.status(429).json({
-      statusCode: 429,
       code: 'RATE_LIMITED',
       message: 'Too many requests',
-      requestId: String(request.id ?? response.getHeader('x-request-id') ?? ''),
+      correlationId: String(request.id ?? response.getHeader('x-request-id') ?? ''),
     });
   };
   app.use(
@@ -44,7 +43,8 @@ export async function createApplication(environment?: NodeJS.ProcessEnv) {
       limit: config.RATE_LIMIT_MAX,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
-      skip: (request) => ['/health/live', '/health/ready'].includes(request.path),
+      skip: (request) =>
+        ['/health/live', '/health/ready', '/api/health'].includes(request.path.replace(/\/$/, '')),
       handler: limitHandler,
       validate: { trustProxy: !config.TRUST_PROXY },
     }),
